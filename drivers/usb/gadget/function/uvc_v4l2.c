@@ -31,10 +31,19 @@ static struct uvc_format_desc *to_uvc_format(struct uvcg_format *uformat)
 {
 	char guid[16] = UVC_GUID_FORMAT_MJPEG;
 	struct uvc_format_desc *format;
-	struct uvcg_uncompressed *unc;
 
 	if (uformat->type == UVCG_UNCOMPRESSED) {
+		struct uvcg_uncompressed *unc;
+
 		unc = to_uvcg_uncompressed(&uformat->group.cg_item);
+		if (!unc)
+			return ERR_PTR(-EINVAL);
+
+		memcpy(guid, unc->desc.guidFormat, sizeof(guid));
+	} else if (uformat->type == UVCG_FRAMEBASED) {
+		struct uvcg_framebased *unc;
+
+		unc = to_uvcg_framebased(&uformat->group.cg_item);
 		if (!unc)
 			return ERR_PTR(-EINVAL);
 
@@ -68,6 +77,16 @@ static int uvc_get_frame_size(struct uvcg_format *uformat,
 		       struct uvcg_frame *uframe)
 {
 	unsigned int bpl = uvc_v4l2_get_bytesperline(uformat, uframe);
+
+	if (uformat->type == UVCG_FRAMEBASED && !bpl) {
+		struct uvcg_framebased *u;
+
+		u = to_uvcg_framebased(&uformat->group.cg_item);
+		if (u) {
+			bpl = u->desc.bBitsPerPixel * uframe->frame.w_width / 8;
+			pr_info("%s: set bpl to %d for framebased format\n", __func__, bpl);
+		}
+	}
 
 	return bpl ? bpl * uframe->frame.w_height :
 		uframe->frame.dw_max_video_frame_buffer_size;
@@ -190,6 +209,7 @@ uvc_send_response(struct uvc_device *uvc, struct uvc_request_data *data)
 	req->length = min_t(unsigned int, uvc->event_length, data->length);
 	req->zero = data->length < uvc->event_length;
 
+	uvc_trace(UVC_TRACE_CONTROL, "%s: req len %d\n", __func__, req->length);
 	memcpy(req->buf, data->data, req->length);
 
 	return usb_ep_queue(cdev->gadget->ep0, req, GFP_KERNEL);
@@ -448,16 +468,28 @@ uvc_v4l2_streamon(struct file *file, void *fh, enum v4l2_buf_type type)
 	if (type != video->queue.queue.type)
 		return -EINVAL;
 
+	if (uvc->state == UVC_STATE_DISCONNECTED)
+		return -ENODEV;
+
 	/* Enable UVC video. */
-	ret = uvcg_video_enable(video, 1);
+	ret = uvcg_video_enable(video);
 	if (ret < 0)
 		return ret;
 
 	/*
-	 * Complete the alternate setting selection setup phase now that
-	 * userspace is ready to provide video frames.
+	 * Alt settings in an interface are supported only
+	 * for ISOC endpoints as there are different alt-
+	 * settings for zero-bandwidth and full-bandwidth
+	 * cases, but the same is not true for BULK endpoints,
+	 * as they have a single alt-setting.
+	 *
+	 * For ISOC endpoints, Complete the alternate setting
+	 * selection setup phase now that userspace is ready
+	 * to provide video frames.
 	 */
-	uvc_function_setup_continue(uvc);
+	if (!usb_endpoint_xfer_bulk(video->ep->desc))
+		uvc_function_setup_continue(uvc, 0);
+
 	uvc->state = UVC_STATE_STREAMING;
 
 	return 0;
@@ -469,11 +501,21 @@ uvc_v4l2_streamoff(struct file *file, void *fh, enum v4l2_buf_type type)
 	struct video_device *vdev = video_devdata(file);
 	struct uvc_device *uvc = video_get_drvdata(vdev);
 	struct uvc_video *video = &uvc->video;
+	int ret = 0;
 
 	if (type != video->queue.queue.type)
 		return -EINVAL;
 
-	return uvcg_video_enable(video, 0);
+	ret = uvcg_video_disable(video);
+	if (ret < 0)
+		return ret;
+
+	if (uvc->state != UVC_STATE_STREAMING)
+		return 0;
+
+	uvc->state = UVC_STATE_CONNECTED;
+	uvc_function_setup_continue(uvc, 1);
+	return 0;
 }
 
 static int
@@ -506,7 +548,7 @@ uvc_v4l2_subscribe_event(struct v4l2_fh *fh,
 static void uvc_v4l2_disable(struct uvc_device *uvc)
 {
 	uvc_function_disconnect(uvc);
-	uvcg_video_enable(&uvc->video, 0);
+	uvcg_video_disable(&uvc->video);
 	uvcg_free_buffers(&uvc->video.queue);
 	uvc->func_connected = false;
 	wake_up_interruptible(&uvc->func_connected_queue);
@@ -647,10 +689,12 @@ const struct v4l2_file_operations uvc_v4l2_fops = {
 	.open		= uvc_v4l2_open,
 	.release	= uvc_v4l2_release,
 	.unlocked_ioctl	= video_ioctl2,
+#ifdef CONFIG_COMPAT
+	.compat_ioctl32	= video_ioctl2,
+#endif
 	.mmap		= uvc_v4l2_mmap,
 	.poll		= uvc_v4l2_poll,
 #ifndef CONFIG_MMU
 	.get_unmapped_area = uvcg_v4l2_get_unmapped_area,
 #endif
 };
-

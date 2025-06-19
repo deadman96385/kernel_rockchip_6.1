@@ -187,7 +187,11 @@ static int __init iommu_subsys_init(void)
 
 	return 0;
 }
+#ifdef CONFIG_INITCALL_ASYNC
+postcore_initcall_sync(iommu_subsys_init);
+#else
 subsys_initcall(iommu_subsys_init);
+#endif
 
 static int remove_iommu_group(struct device *dev, void *data)
 {
@@ -1667,6 +1671,9 @@ struct iommu_domain *iommu_group_default_domain(struct iommu_group *group)
 {
 	return group->default_domain;
 }
+#ifdef CONFIG_NO_GKI
+EXPORT_SYMBOL_GPL(iommu_group_default_domain);
+#endif
 
 static int probe_iommu_group(struct device *dev, void *data)
 {
@@ -1991,7 +1998,9 @@ int iommu_attach_device(struct iommu_domain *domain, struct device *dev)
 	 */
 	mutex_lock(&group->mutex);
 	ret = -EINVAL;
-	if (iommu_group_device_count(group) != 1)
+
+	/* don't break attach if iommu shared by more than one master */
+	if (iommu_group_device_count(group) < 1)
 		goto out_unlock;
 
 	ret = __iommu_attach_group(domain, group);
@@ -2031,8 +2040,10 @@ void iommu_detach_device(struct iommu_domain *domain, struct device *dev)
 		return;
 
 	mutex_lock(&group->mutex);
+
+	/* Don't break detach if iommu shared by more than one master */
 	if (WARN_ON(domain != group->domain) ||
-	    WARN_ON(iommu_group_device_count(group) != 1))
+	    WARN_ON(iommu_group_device_count(group) < 1))
 		goto out_unlock;
 	__iommu_group_set_core_domain(group);
 

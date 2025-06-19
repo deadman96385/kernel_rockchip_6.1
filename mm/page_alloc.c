@@ -1616,9 +1616,15 @@ static void free_one_page(struct zone *zone,
 }
 
 static void __meminit __init_single_page(struct page *page, unsigned long pfn,
-				unsigned long zone, int nid)
+				unsigned long zone, int nid,
+				bool zero_page_struct __maybe_unused)
 {
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT
+	if (zero_page_struct)
+		mm_zero_struct_page(page);
+#else
 	mm_zero_struct_page(page);
+#endif
 	set_page_links(page, zone, nid, pfn);
 	init_page_count(page);
 	page_mapcount_reset(page);
@@ -1651,7 +1657,7 @@ static void __meminit init_reserved_page(unsigned long pfn)
 		if (zone_spans_pfn(zone, pfn))
 			break;
 	}
-	__init_single_page(pfn_to_page(pfn), pfn, zid, nid);
+	__init_single_page(pfn_to_page(pfn), pfn, zid, nid, true);
 }
 #else
 static inline void init_reserved_page(unsigned long pfn)
@@ -1805,6 +1811,43 @@ void __init memblock_free_pages(struct page *page, unsigned long pfn,
 	}
 	__free_pages_core(page, order);
 }
+
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK
+void __init rk_free_pages_core(struct page *page, unsigned int order)
+{
+	__free_pages_core(page, order);
+	totalram_pages_add(1 << order);
+#ifdef CONFIG_HIGHMEM
+	if (PageHighMem(page))
+		totalhigh_pages_add(1 << order);
+#endif
+}
+
+unsigned long __init rk_deferred_init_pages(struct zone *zone,
+					    unsigned long pfn,
+					    unsigned long end_pfn)
+{
+	int nid = zone_to_nid(zone);
+	unsigned long nr_pages = 0;
+	int zid = zone_idx(zone);
+	struct page *page = NULL;
+
+	for (; pfn < end_pfn; pfn++) {
+		if (!page || pageblock_aligned(pfn))
+			page = pfn_to_page(pfn);
+		else
+			page++;
+
+		__init_single_page(page, pfn, zid, nid, true);
+		nr_pages++;
+
+		/* Call cond_resched() only once every 8 pages */
+		if ((nr_pages & 7) == 0)
+			cond_resched();
+	}
+	return (nr_pages);
+}
+#endif /* CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK */
 
 /*
  * Check that the whole (or subset of) a pageblock given by the interval of
@@ -1972,7 +2015,7 @@ static unsigned long  __init deferred_init_pages(struct zone *zone,
 		} else {
 			page++;
 		}
-		__init_single_page(page, pfn, zid, nid);
+		__init_single_page(page, pfn, zid, nid, true);
 		nr_pages++;
 	}
 	return (nr_pages);
@@ -6812,6 +6855,16 @@ void __meminit memmap_init_range(unsigned long size, int nid, unsigned long zone
 	}
 #endif
 
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK
+	if (rk_defer_init_hpages(nid, zone, start_pfn, end_pfn))
+		return;
+#endif
+
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT
+	/* Zero all page struct in advance */
+	memset(pfn_to_page(start_pfn), 0, sizeof(struct page) * size);
+#endif
+
 	for (pfn = start_pfn; pfn < end_pfn; ) {
 		/*
 		 * There can be holes in boot-time mem_map[]s handed to this
@@ -6825,7 +6878,7 @@ void __meminit memmap_init_range(unsigned long size, int nid, unsigned long zone
 		}
 
 		page = pfn_to_page(pfn);
-		__init_single_page(page, pfn, zone, nid);
+		__init_single_page(page, pfn, zone, nid, false);
 		if (context == MEMINIT_HOTPLUG)
 			__SetPageReserved(page);
 
@@ -6848,7 +6901,7 @@ static void __ref __init_zone_device_page(struct page *page, unsigned long pfn,
 					  struct dev_pagemap *pgmap)
 {
 
-	__init_single_page(page, pfn, zone_idx, nid);
+	__init_single_page(page, pfn, zone_idx, nid, true);
 
 	/*
 	 * Mark page reserved as it will need to wait for onlining
@@ -7021,7 +7074,7 @@ static void __init init_unavailable_range(unsigned long spfn,
 			pfn = pageblock_end_pfn(pfn) - 1;
 			continue;
 		}
-		__init_single_page(pfn_to_page(pfn), pfn, zone, node);
+		__init_single_page(pfn_to_page(pfn), pfn, zone, node, true);
 		__SetPageReserved(pfn_to_page(pfn));
 		pgcnt++;
 	}

@@ -101,6 +101,43 @@ struct pglist_data __refdata contig_page_data;
 EXPORT_SYMBOL(contig_page_data);
 #endif
 
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK
+static int db_count __initdata;
+#define DB_COUNT_MAX 4
+
+static struct deferred_block {
+	unsigned long defer_start;
+	unsigned long defer_end;
+} db[DB_COUNT_MAX] __initdata;
+
+#define DEFAULT_DEFER_FREE_BLOCK_SIZE SZ_256M
+static unsigned long defer_free_block_size __initdata =
+	DEFAULT_DEFER_FREE_BLOCK_SIZE;
+
+static int __init early_defer_free_block_size(char *p)
+{
+	defer_free_block_size = memparse(p, &p);
+
+	pr_debug("defer_free_block_size = 0x%lx\n", defer_free_block_size);
+
+	return 0;
+}
+
+early_param("defer_free_block_size", early_defer_free_block_size);
+
+/* deferred highpage stuff */
+struct rk_defered_highpage_info {
+	unsigned long pfn_start;
+	unsigned long pfn_end;
+	struct zone *zone;
+};
+
+#define RK_DHPI_NUM_MAX 3
+
+static struct rk_defered_highpage_info rk_dhpi[RK_DHPI_NUM_MAX];
+static int rk_dhpi_num;
+#endif /* CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK */
+
 unsigned long max_low_pfn;
 unsigned long min_low_pfn;
 unsigned long max_pfn;
@@ -2042,6 +2079,110 @@ static void __init __free_pages_memory(unsigned long start, unsigned long end)
 	}
 }
 
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK
+static void __init rk_free_highpages(void)
+{
+#ifdef CONFIG_HIGHMEM
+	unsigned long max_low = max_low_pfn;
+	phys_addr_t range_start, range_end;
+	u64 i;
+
+	/* set highmem page free */
+	for_each_free_mem_range(i, NUMA_NO_NODE, MEMBLOCK_NONE,
+				&range_start, &range_end, NULL) {
+		unsigned long start = PFN_UP(range_start);
+		unsigned long end = PFN_DOWN(range_end);
+
+		/* Ignore complete lowmem entries */
+		if (end <= max_low)
+			continue;
+
+		/* Truncate partial highmem entries */
+		if (start < max_low)
+			start = max_low;
+
+		while (start < end) {
+			int order;
+
+			order = min(MAX_ORDER - 1UL, __ffs(start));
+
+			while (start + (1UL << order) > end)
+				order--;
+
+			rk_free_pages_core(pfn_to_page(start), order);
+			start += (1UL << order);
+
+			cond_resched();
+		}
+	}
+#endif
+}
+
+bool __meminit rk_defer_init_hpages(int nid, unsigned long zone_idx,
+			unsigned long pfn, unsigned long end_pfn)
+{
+	struct pglist_data *pdata = NODE_DATA(nid);
+	struct zone *zone = &pdata->node_zones[zone_idx];
+
+	if (rk_dhpi_num >= RK_DHPI_NUM_MAX) {
+		pr_err("too much deferred page zone\n");
+		return false;
+	}
+
+	if (strstr(zone->name, "HighMem")) {
+		pr_debug("%s, zone : %s, pfn[0x%lx-0x%lx]\n", __func__,
+			 zone->name, pfn, end_pfn);
+		rk_dhpi[rk_dhpi_num].pfn_start = pfn;
+		rk_dhpi[rk_dhpi_num].pfn_end = end_pfn;
+		rk_dhpi[rk_dhpi_num].zone = zone;
+		rk_dhpi_num++;
+
+		return true;
+	}
+	return false;
+}
+
+int __init defer_free_memblock(void *unused)
+{
+	int i;
+	unsigned long nr_pages = 0;
+
+	pr_debug("%s, rk_dhpi_num = %d\n", __func__, rk_dhpi_num);
+
+	for (i = 0; i < rk_dhpi_num; i++) {
+		struct zone *zone = rk_dhpi[i].zone;
+		unsigned long start_pfn = rk_dhpi[i].pfn_start;
+		unsigned long end_pfn = rk_dhpi[i].pfn_end;
+
+		pr_info("%s, zone : %s, pfn[0x%lx-0x%lx]\n", __func__,
+			zone->name, start_pfn, end_pfn);
+		nr_pages += rk_deferred_init_pages(zone, start_pfn, end_pfn);
+	}
+
+	pr_debug("%s, deferred_nr_page = 0x%lx\n", __func__, nr_pages);
+
+	for (i = 0; i < db_count; i++) {
+		pr_debug("%s: start = %ld, end = %ld\n",
+			 __func__, db[i].defer_start, db[i].defer_end);
+
+		__free_pages_memory(db[i].defer_start, db[i].defer_end);
+
+		totalram_pages_add(db[i].defer_end - db[i].defer_start);
+
+		pr_info("%s: size %luM free %luM [%luM - %luM] total %luM\n",
+			__func__, defer_free_block_size >> 20,
+			(db[i].defer_end - db[i].defer_start) >> (20 - PAGE_SHIFT),
+			db[i].defer_start >> (20 - PAGE_SHIFT),
+			db[i].defer_end >> (20 - PAGE_SHIFT),
+			totalram_pages() >> (20 - PAGE_SHIFT));
+	}
+
+	rk_free_highpages();
+
+	return 0;
+}
+#endif /* CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK */
+
 static unsigned long __init __free_memory_core(phys_addr_t start,
 				 phys_addr_t end)
 {
@@ -2051,6 +2192,16 @@ static unsigned long __init __free_memory_core(phys_addr_t start,
 
 	if (start_pfn >= end_pfn)
 		return 0;
+
+#ifdef CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK
+	pr_debug("%s, start = %pa, end = %pa\n", __func__, &start, &end);
+	if ((end - start) > defer_free_block_size && (db_count < ARRAY_SIZE(db))) {
+		db[db_count].defer_start = start_pfn;
+		db[db_count].defer_end = end_pfn;
+		db_count++;
+		return 0;
+	}
+#endif
 
 	__free_pages_memory(start_pfn, end_pfn);
 

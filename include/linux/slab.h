@@ -225,7 +225,7 @@ static inline bool kmem_dump_obj(void *object) { return false; }
  * alignment larger than the alignment of a 64-bit integer.
  * Setting ARCH_DMA_MINALIGN in arch headers allows that.
  */
-#if defined(ARCH_DMA_MINALIGN) && ARCH_DMA_MINALIGN > 8
+#if defined(ARCH_DMA_MINALIGN) && ARCH_DMA_MINALIGN > 8 && !IS_ENABLED(CONFIG_ROCKCHIP_KMALLOC_NO_USE_ARCH_DMA_MINALIGN)
 #define ARCH_KMALLOC_MINALIGN ARCH_DMA_MINALIGN
 #define KMALLOC_MIN_SIZE ARCH_DMA_MINALIGN
 #define KMALLOC_SHIFT_LOW ilog2(ARCH_DMA_MINALIGN)

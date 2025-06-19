@@ -824,6 +824,14 @@ int ubi_io_write_ec_hdr(struct ubi_device *ubi, int pnum,
 	if (ubi_dbg_power_cut(ubi, POWER_CUT_EC_WRITE))
 		return -EROFS;
 
+	if (IS_ENABLED(CONFIG_ARCH_ROCKCHIP)) {
+		/*
+		 * All FF data is relatively friendly to the data retention capability of SPI
+		 * Nand devices.
+		 */
+		memset((char *)ec_hdr + sizeof(struct ubi_ec_hdr), 0xFF,
+		       ubi->ec_hdr_alsize - sizeof(struct ubi_ec_hdr));
+	}
 	err = ubi_io_write(ubi, ec_hdr, pnum, 0, ubi->ec_hdr_alsize);
 	return err;
 }
@@ -1074,6 +1082,14 @@ int ubi_io_write_vid_hdr(struct ubi_device *ubi, int pnum,
 	if (ubi_dbg_power_cut(ubi, POWER_CUT_VID_WRITE))
 		return -EROFS;
 
+	if (IS_ENABLED(CONFIG_ARCH_ROCKCHIP)) {
+		/*
+		 * All FF data is relatively friendly to the data retention capability of SPI
+		 * Nand devices.
+		 */
+		memset((char *)p + sizeof(struct ubi_vid_hdr), 0xFF,
+		       ubi->vid_hdr_alsize - sizeof(struct ubi_vid_hdr));
+	}
 	err = ubi_io_write(ubi, p, pnum, ubi->vid_hdr_aloffset,
 			   ubi->vid_hdr_alsize);
 	return err;
@@ -1296,7 +1312,7 @@ static int self_check_write(struct ubi_device *ubi, const void *buf, int pnum,
 	void *buf1;
 	loff_t addr = (loff_t)pnum * ubi->peb_size + offset;
 
-	if (!ubi_dbg_chk_io(ubi))
+	if (false)
 		return 0;
 
 	buf1 = __vmalloc(len, GFP_NOFS);

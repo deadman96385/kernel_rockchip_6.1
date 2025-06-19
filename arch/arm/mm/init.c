@@ -22,6 +22,7 @@
 #include <linux/sizes.h>
 #include <linux/stop_machine.h>
 #include <linux/swiotlb.h>
+#include <linux/rk-dma-heap.h>
 
 #include <asm/cp15.h>
 #include <asm/mach-types.h>
@@ -197,6 +198,7 @@ void __init arm_memblock_init(const struct machine_desc *mdesc)
 
 	/* reserve memory for DMA contiguous allocations */
 	dma_contiguous_reserve(arm_dma_limit);
+	rk_dma_heap_cma_setup();
 
 	arm_memblock_steal_permitted = false;
 	memblock_dump_all();
@@ -242,6 +244,9 @@ static void __init free_highpages(void)
 	unsigned long max_low = max_low_pfn;
 	phys_addr_t range_start, range_end;
 	u64 i;
+
+	if (IS_ENABLED(CONFIG_ROCKCHIP_THUNDER_BOOT_DEFER_FREE_MEMBLOCK))
+		return;
 
 	/* set highmem page free */
 	for_each_free_mem_range(i, NUMA_NO_NODE, MEMBLOCK_NONE,

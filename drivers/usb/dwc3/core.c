@@ -142,6 +142,7 @@ static void __dwc3_set_mode(struct work_struct *work)
 	struct dwc3 *dwc = work_to_dwc(work);
 	unsigned long flags;
 	int ret;
+	int retries = 1000;
 	u32 reg;
 	u32 desired_dr_role;
 
@@ -151,6 +152,18 @@ static void __dwc3_set_mode(struct work_struct *work)
 	spin_unlock_irqrestore(&dwc->lock, flags);
 
 	pm_runtime_get_sync(dwc->dev);
+
+#if defined(CONFIG_ARCH_ROCKCHIP) && defined(CONFIG_NO_GKI)
+	if (dwc->desired_role_sw_mode == USB_DR_MODE_PERIPHERAL &&
+	    dwc->desired_role_sw_mode != dwc->current_role_sw_mode)
+		pm_runtime_get(dwc->dev);
+	else if ((dwc->desired_role_sw_mode == USB_DR_MODE_UNKNOWN ||
+		  dwc->desired_role_sw_mode == USB_DR_MODE_HOST) &&
+		  dwc->current_role_sw_mode == USB_DR_MODE_PERIPHERAL)
+		pm_runtime_put(dwc->dev);
+
+	dwc->current_role_sw_mode = dwc->desired_role_sw_mode;
+#endif
 
 	if (dwc->current_dr_role == DWC3_GCTL_PRTCAP_OTG)
 		dwc3_otg_update(dwc, 0);
@@ -231,7 +244,26 @@ static void __dwc3_set_mode(struct work_struct *work)
 		}
 		break;
 	case DWC3_GCTL_PRTCAP_DEVICE:
-		dwc3_core_soft_reset(dwc);
+		reg = dwc3_readl(dwc->regs, DWC3_DCTL);
+		reg |= DWC3_DCTL_CSFTRST;
+		dwc3_writel(dwc->regs, DWC3_DCTL, reg);
+
+		if (DWC3_VER_IS_WITHIN(DWC31, 190A, ANY) || DWC3_IP_IS(DWC32))
+			retries = 10;
+
+		do {
+			reg = dwc3_readl(dwc->regs, DWC3_DCTL);
+			if (!(reg & DWC3_DCTL_CSFTRST))
+				goto done;
+
+			if (DWC3_VER_IS_WITHIN(DWC31, 190A, ANY) || DWC3_IP_IS(DWC32))
+				msleep(20);
+			else
+				udelay(1);
+		} while (--retries);
+done:
+		if (DWC3_VER_IS_WITHIN(DWC31, ANY, 180A))
+			msleep(50);
 
 		dwc3_event_buffers_setup(dwc);
 
@@ -849,8 +881,20 @@ static int dwc3_clk_enable(struct dwc3 *dwc)
 	if (ret)
 		goto disable_ref_clk;
 
+	ret = clk_prepare_enable(dwc->utmi_clk);
+	if (ret)
+		goto disable_susp_clk;
+
+	ret = clk_prepare_enable(dwc->pipe_clk);
+	if (ret)
+		goto disable_utmi_clk;
+
 	return 0;
 
+disable_utmi_clk:
+	clk_disable_unprepare(dwc->utmi_clk);
+disable_susp_clk:
+	clk_disable_unprepare(dwc->susp_clk);
 disable_ref_clk:
 	clk_disable_unprepare(dwc->ref_clk);
 disable_bus_clk:
@@ -860,6 +904,8 @@ disable_bus_clk:
 
 static void dwc3_clk_disable(struct dwc3 *dwc)
 {
+	clk_disable_unprepare(dwc->pipe_clk);
+	clk_disable_unprepare(dwc->utmi_clk);
 	clk_disable_unprepare(dwc->susp_clk);
 	clk_disable_unprepare(dwc->ref_clk);
 	clk_disable_unprepare(dwc->bus_clk);
@@ -1366,6 +1412,9 @@ static int dwc3_core_init(struct dwc3 *dwc)
 		if (dwc->parkmode_disable_ss_quirk)
 			reg |= DWC3_GUCTL1_PARKMODE_DISABLE_SS;
 
+		if (dwc->parkmode_disable_hs_quirk)
+			reg |= DWC3_GUCTL1_PARKMODE_DISABLE_HS;
+
 		if (DWC3_VER_IS_WITHIN(DWC3, 290A, ANY) &&
 		    (dwc->maximum_speed == USB_SPEED_HIGH ||
 		     dwc->maximum_speed == USB_SPEED_FULL))
@@ -1649,6 +1698,8 @@ static void dwc3_get_properties(struct dwc3 *dwc)
 				"snps,resume-hs-terminations");
 	dwc->parkmode_disable_ss_quirk = device_property_read_bool(dev,
 				"snps,parkmode-disable-ss-quirk");
+	dwc->parkmode_disable_hs_quirk = device_property_read_bool(dev,
+				"snps,parkmode-disable-hs-quirk");
 	dwc->gfladj_refclk_lpm_sel = device_property_read_bool(dev,
 				"snps,gfladj-refclk-lpm-sel-quirk");
 
@@ -1850,6 +1901,78 @@ static struct extcon_dev *dwc3_get_extcon(struct dwc3 *dwc)
 	return edev;
 }
 
+static int dwc3_get_clocks(struct dwc3 *dwc)
+{
+	struct device *dev = dwc->dev;
+
+	if (!dev->of_node)
+		return 0;
+
+	/*
+	 * Clocks are optional, but new DT platforms should support all clocks
+	 * as required by the DT-binding.
+	 * Some devices have different clock names in legacy device trees,
+	 * check for them to retain backwards compatibility.
+	 */
+	dwc->bus_clk = devm_clk_get_optional(dev, "bus_early");
+	if (IS_ERR(dwc->bus_clk)) {
+		return dev_err_probe(dev, PTR_ERR(dwc->bus_clk),
+				"could not get bus clock\n");
+	}
+
+	if (dwc->bus_clk == NULL) {
+		dwc->bus_clk = devm_clk_get_optional(dev, "bus_clk");
+		if (IS_ERR(dwc->bus_clk)) {
+			return dev_err_probe(dev, PTR_ERR(dwc->bus_clk),
+					"could not get bus clock\n");
+		}
+	}
+
+	dwc->ref_clk = devm_clk_get_optional(dev, "ref");
+	if (IS_ERR(dwc->ref_clk)) {
+		return dev_err_probe(dev, PTR_ERR(dwc->ref_clk),
+				"could not get ref clock\n");
+	}
+
+	if (dwc->ref_clk == NULL) {
+		dwc->ref_clk = devm_clk_get_optional(dev, "ref_clk");
+		if (IS_ERR(dwc->ref_clk)) {
+			return dev_err_probe(dev, PTR_ERR(dwc->ref_clk),
+					"could not get ref clock\n");
+		}
+	}
+
+	dwc->susp_clk = devm_clk_get_optional(dev, "suspend");
+	if (IS_ERR(dwc->susp_clk)) {
+		return dev_err_probe(dev, PTR_ERR(dwc->susp_clk),
+				"could not get suspend clock\n");
+	}
+
+	if (dwc->susp_clk == NULL) {
+		dwc->susp_clk = devm_clk_get_optional(dev, "suspend_clk");
+		if (IS_ERR(dwc->susp_clk)) {
+			return dev_err_probe(dev, PTR_ERR(dwc->susp_clk),
+					"could not get suspend clock\n");
+		}
+	}
+
+	/* specific to Rockchip RK3588 */
+	dwc->utmi_clk = devm_clk_get_optional(dev, "utmi");
+	if (IS_ERR(dwc->utmi_clk)) {
+		return dev_err_probe(dev, PTR_ERR(dwc->utmi_clk),
+				"could not get utmi clock\n");
+	}
+
+	/* specific to Rockchip RK3588 */
+	dwc->pipe_clk = devm_clk_get_optional(dev, "pipe");
+	if (IS_ERR(dwc->pipe_clk)) {
+		return dev_err_probe(dev, PTR_ERR(dwc->pipe_clk),
+				"could not get pipe clock\n");
+	}
+
+	return 0;
+}
+
 static int dwc3_probe(struct platform_device *pdev)
 {
 	struct device		*dev = &pdev->dev;
@@ -1900,61 +2023,9 @@ static int dwc3_probe(struct platform_device *pdev)
 		goto put_usb_psy;
 	}
 
-	if (dev->of_node) {
-		/*
-		 * Clocks are optional, but new DT platforms should support all
-		 * clocks as required by the DT-binding.
-		 * Some devices have different clock names in legacy device trees,
-		 * check for them to retain backwards compatibility.
-		 */
-		dwc->bus_clk = devm_clk_get_optional(dev, "bus_early");
-		if (IS_ERR(dwc->bus_clk)) {
-			ret = dev_err_probe(dev, PTR_ERR(dwc->bus_clk),
-					    "could not get bus clock\n");
-			goto put_usb_psy;
-		}
-
-		if (dwc->bus_clk == NULL) {
-			dwc->bus_clk = devm_clk_get_optional(dev, "bus_clk");
-			if (IS_ERR(dwc->bus_clk)) {
-				ret = dev_err_probe(dev, PTR_ERR(dwc->bus_clk),
-						    "could not get bus clock\n");
-				goto put_usb_psy;
-			}
-		}
-
-		dwc->ref_clk = devm_clk_get_optional(dev, "ref");
-		if (IS_ERR(dwc->ref_clk)) {
-			ret = dev_err_probe(dev, PTR_ERR(dwc->ref_clk),
-					    "could not get ref clock\n");
-			goto put_usb_psy;
-		}
-
-		if (dwc->ref_clk == NULL) {
-			dwc->ref_clk = devm_clk_get_optional(dev, "ref_clk");
-			if (IS_ERR(dwc->ref_clk)) {
-				ret = dev_err_probe(dev, PTR_ERR(dwc->ref_clk),
-						    "could not get ref clock\n");
-				goto put_usb_psy;
-			}
-		}
-
-		dwc->susp_clk = devm_clk_get_optional(dev, "suspend");
-		if (IS_ERR(dwc->susp_clk)) {
-			ret = dev_err_probe(dev, PTR_ERR(dwc->susp_clk),
-					    "could not get suspend clock\n");
-			goto put_usb_psy;
-		}
-
-		if (dwc->susp_clk == NULL) {
-			dwc->susp_clk = devm_clk_get_optional(dev, "suspend_clk");
-			if (IS_ERR(dwc->susp_clk)) {
-				ret = dev_err_probe(dev, PTR_ERR(dwc->susp_clk),
-						    "could not get suspend clock\n");
-				goto put_usb_psy;
-			}
-		}
-	}
+	ret = dwc3_get_clocks(dwc);
+	if (ret)
+		goto put_usb_psy;
 
 	ret = reset_control_deassert(dwc->reset);
 	if (ret)
@@ -2024,6 +2095,20 @@ static int dwc3_probe(struct platform_device *pdev)
 	ret = dwc3_core_init_mode(dwc);
 	if (ret)
 		goto err5;
+
+	if (IS_REACHABLE(CONFIG_ARCH_ROCKCHIP) && dwc->dr_mode == USB_DR_MODE_OTG &&
+	    (of_device_is_compatible(dev->parent->of_node, "rockchip,rk3399-dwc3") ||
+	     of_device_is_compatible(dev->of_node, "rockchip,rk3576-dwc3"))) {
+		if (IS_REACHABLE(CONFIG_NO_GKI))
+			pm_runtime_set_autosuspend_delay(dev, 100);
+		pm_runtime_allow(dev);
+		pm_runtime_put_sync_suspend(dev);
+
+		if (dwc->edev && extcon_get_state(dwc->edev, EXTCON_USB_HOST))
+			dwc3_set_mode(dwc, DWC3_GCTL_PRTCAP_HOST);
+
+		return 0;
+	}
 
 	pm_runtime_put(dev);
 
@@ -2098,6 +2183,14 @@ static int dwc3_remove(struct platform_device *pdev)
 		power_supply_put(dwc->usb_psy);
 
 	return 0;
+}
+
+static void dwc3_shutdown(struct platform_device *pdev)
+{
+	struct device   *dev = &pdev->dev;
+
+	if (of_device_is_compatible(dev->of_node, "rockchip,rk3576-dwc3"))
+		dwc3_remove(pdev);
 }
 
 #ifdef CONFIG_PM
@@ -2187,7 +2280,8 @@ static int dwc3_suspend_common(struct dwc3 *dwc, pm_message_t msg)
 		dwc3_core_exit(dwc);
 		break;
 	default:
-		/* do nothing */
+		if (!pm_runtime_suspended(dwc->dev))
+			dwc3_core_exit(dwc);
 		break;
 	}
 
@@ -2249,7 +2343,9 @@ static int dwc3_resume_common(struct dwc3 *dwc, pm_message_t msg)
 
 		break;
 	default:
-		/* do nothing */
+		ret = dwc3_core_init_for_resume(dwc);
+		if (ret)
+			return ret;
 		break;
 	}
 
@@ -2348,6 +2444,9 @@ static int dwc3_suspend(struct device *dev)
 	struct dwc3	*dwc = dev_get_drvdata(dev);
 	int		ret;
 
+	if (pm_runtime_suspended(dwc->dev))
+		return 0;
+
 	ret = dwc3_suspend_common(dwc, PMSG_SUSPEND);
 	if (ret)
 		return ret;
@@ -2361,6 +2460,9 @@ static int dwc3_resume(struct device *dev)
 {
 	struct dwc3	*dwc = dev_get_drvdata(dev);
 	int		ret;
+
+	if (pm_runtime_suspended(dwc->dev))
+		return 0;
 
 	pinctrl_pm_select_default_state(dev);
 
@@ -2431,6 +2533,7 @@ MODULE_DEVICE_TABLE(acpi, dwc3_acpi_match);
 static struct platform_driver dwc3_driver = {
 	.probe		= dwc3_probe,
 	.remove		= dwc3_remove,
+	.shutdown	= dwc3_shutdown,
 	.driver		= {
 		.name	= "dwc3",
 		.of_match_table	= of_match_ptr(of_dwc3_match),

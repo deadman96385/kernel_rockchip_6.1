@@ -41,7 +41,7 @@
 #define DWC3_EP0_SETUP_SIZE	512
 #define DWC3_ENDPOINTS_NUM	32
 #define DWC3_XHCI_RESOURCES_NUM	2
-#define DWC3_ISOC_MAX_RETRIES	5
+#define DWC3_ISOC_MAX_RETRIES	50
 
 #define DWC3_SCRATCHBUF_SIZE	4096	/* each buffer is assumed to be 4KiB */
 #define DWC3_EVENT_BUFFERS_SIZE	4096
@@ -265,6 +265,7 @@
 #define DWC3_GUCTL1_DEV_FORCE_20_CLK_FOR_30_CLK	BIT(26)
 #define DWC3_GUCTL1_DEV_L1_EXIT_BY_HW		BIT(24)
 #define DWC3_GUCTL1_PARKMODE_DISABLE_SS		BIT(17)
+#define DWC3_GUCTL1_PARKMODE_DISABLE_HS		BIT(16)
 #define DWC3_GUCTL1_RESUME_OPMODE_HS_HOST	BIT(10)
 
 /* Global Status Register */
@@ -328,6 +329,7 @@
 /* Global RX Fifo Size Register */
 #define DWC31_GRXFIFOSIZ_RXFDEP(n)	((n) & 0x7fff)	/* DWC_usb31 only */
 #define DWC3_GRXFIFOSIZ_RXFDEP(n)	((n) & 0xffff)
+#define DWC3_GRXFIFOSIZ_RXFSTADDR(n)	((n) & 0xffff0000)
 
 /* Global Event Size Registers */
 #define DWC3_GEVNTSIZ_INTMASK		BIT(31)
@@ -378,6 +380,7 @@
 #define DWC3_GHWPARAMS6_HNPSUPPORT		BIT(11)
 #define DWC3_GHWPARAMS6_SRPSUPPORT		BIT(10)
 #define DWC3_GHWPARAMS6_EN_FPGA			BIT(7)
+#define DWC3_GHWPARAMS6_RAM0_DEPTH(n)		(((n) >> 16) & 0xffff)
 
 /* DWC_usb32 only */
 #define DWC3_GHWPARAMS6_MDWIDTH(n)		((n) & (0x3 << 8))
@@ -892,6 +895,7 @@ struct dwc3_hwparams {
 
 /* HWPARAMS1 */
 #define DWC3_NUM_INT(n)		(((n) & (0x3f << 15)) >> 15)
+#define DWC3_NUM_RAMS(n)	(((n) & (0x3 << 21)) >> 21)
 
 /* HWPARAMS3 */
 #define DWC3_NUM_IN_EPS_MASK	(0x1f << 18)
@@ -992,6 +996,8 @@ struct dwc3_scratchpad_array {
  * @bus_clk: clock for accessing the registers
  * @ref_clk: reference clock
  * @susp_clk: clock used when the SS phy is in low power (S3) state
+ * @utmi_clk: clock used for USB2 PHY communication
+ * @pipe_clk: clock used for USB3 PHY communication
  * @reset: reset control
  * @regs: base address for our registers
  * @regs_size: address space size
@@ -1023,6 +1029,8 @@ struct dwc3_scratchpad_array {
  * @role_sw: usb_role_switch handle
  * @role_switch_default_mode: default operation mode of controller while
  *			usb role is USB_ROLE_NONE.
+ * @current_role_sw_mode: current usb role switch mode.
+ * @desired_role_sw_mode: desired usb role switch mode.
  * @usb_psy: pointer to power supply interface.
  * @usb2_phy: pointer to USB2 PHY
  * @usb3_phy: pointer to USB3 PHY
@@ -1109,6 +1117,8 @@ struct dwc3_scratchpad_array {
  *			generation after resume from suspend.
  * @parkmode_disable_ss_quirk: set if we need to disable all SuperSpeed
  *			instances in park mode.
+ * @parkmode_disable_hs_quirk: set if we need to disable all HishSpeed
+ *			instances in park mode.
  * @tx_de_emphasis_quirk: set if we enable Tx de-emphasis quirk
  * @tx_de_emphasis: Tx de-emphasis value
  *	0	- -6dB de-emphasis
@@ -1162,6 +1172,8 @@ struct dwc3 {
 	struct clk		*bus_clk;
 	struct clk		*ref_clk;
 	struct clk		*susp_clk;
+	struct clk		*utmi_clk;
+	struct clk		*pipe_clk;
 
 	struct reset_control	*reset;
 
@@ -1187,6 +1199,10 @@ struct dwc3 {
 	enum usb_phy_interface	hsphy_mode;
 	struct usb_role_switch	*role_sw;
 	enum usb_dr_mode	role_switch_default_mode;
+#if defined(CONFIG_ARCH_ROCKCHIP) && defined(CONFIG_NO_GKI)
+	u32			current_role_sw_mode;
+	u32			desired_role_sw_mode;
+#endif
 
 	struct power_supply	*usb_psy;
 
@@ -1333,6 +1349,7 @@ struct dwc3 {
 	unsigned		dis_tx_ipgap_linecheck_quirk:1;
 	unsigned		resume_hs_terminations:1;
 	unsigned		parkmode_disable_ss_quirk:1;
+	unsigned		parkmode_disable_hs_quirk:1;
 	unsigned		gfladj_refclk_lpm_sel:1;
 
 	unsigned		tx_de_emphasis_quirk:1;

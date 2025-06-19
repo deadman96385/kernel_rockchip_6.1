@@ -260,7 +260,7 @@ config MOTORCOMM_PHY
 	tristate "Motorcomm PHYs"
 	help
 	  Enables support for Motorcomm network PHYs.
-	  Currently supports the YT8511 gigabit PHY.
+	  Currently supports the YT8511, YT8521, YT8531, RK631 gigabit PHY.
 
 config NATIONAL_PHY
 	tristate "National Semiconductor PHYs"
@@ -302,10 +302,20 @@ config RENESAS_PHY
 	help
 	  Supports the Renesas PHYs uPD60620 and uPD60620A.
 
+config ROCKCHIP_FEPHY
+	tristate "Driver for Rockchip Fast Ethernet PHYs"
+	help
+	  Currently supports the Rockchip Fast Ethernet PHYs.
+
 config ROCKCHIP_PHY
 	tristate "Rockchip Ethernet PHYs"
 	help
 	  Currently supports the integrated Ethernet PHY.
+
+config RK630_PHY
+	tristate "Driver for RK630 Ethernet PHYs"
+	help
+	  Currently supports the RK630 Ethernet PHY.
 
 config SMSC_PHY
 	tristate "SMSC PHYs"
