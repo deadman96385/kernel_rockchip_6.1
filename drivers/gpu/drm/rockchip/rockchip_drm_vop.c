@@ -2214,6 +2214,7 @@ static void vop_crtc_atomic_disable(struct drm_crtc *crtc,
 	struct vop *vop = to_vop(crtc);
 	int sys_status = drm_crtc_index(crtc) ?
 				SYS_STATUS_LCDC1 : SYS_STATUS_LCDC0;
+	struct rockchip_crtc_state *s = to_rockchip_crtc_state(crtc->state);
 	unsigned long status;
 
 	WARN_ON(vop->event);
@@ -2248,7 +2249,7 @@ static void vop_crtc_atomic_disable(struct drm_crtc *crtc,
 
 	spin_unlock(&vop->reg_lock);
 
-	if (!wait_for_completion_timeout(&vop->dsp_hold_completion,
+	if (!s->hold_mode && !wait_for_completion_timeout(&vop->dsp_hold_completion,
 					 msecs_to_jiffies(200)))
 		WARN(1, "%s: timed out waiting for DSP hold", crtc->name);
 
@@ -3821,15 +3822,13 @@ out:
 
 static void vop_crtc_te_handler(struct drm_crtc *crtc)
 {
-	struct vop *vop;
+	struct vop *vop = to_vop(crtc);
 
-	if (!crtc)
-		return;
+        if (!crtc || !crtc->state->active)
+                return;
 
-	vop = to_vop(crtc);
-
-	if (vop->mcu_timing.mcu_pix_total)
-		VOP_CTRL_SET(vop, mcu_frame_st, 1);
+	VOP_CTRL_SET(vop, edpi_wms_fs, 1);
+	VOP_CTRL_SET(vop, edpi_wms_fs, 0);
 }
 
 #if defined(CONFIG_ROCKCHIP_DRM_DEBUG)
@@ -4279,6 +4278,11 @@ static void vop_crtc_atomic_enable(struct drm_crtc *crtc,
 		VOP_GRF_SET(vop, vo0_grf, grf_mipi_mode, 0);
 		VOP_GRF_SET(vop, vo0_grf, grf_mipi_pin_pol, val);
 		VOP_GRF_SET(vop, vo0_grf, grf_mipi_1to4_en, 1);
+
+		if (s->hold_mode) {
+			VOP_CTRL_SET(vop, edpi_te_en, !s->soft_te);
+			VOP_CTRL_SET(vop, edpi_wms_hold_en, 1);
+		}
 		break;
 	case DRM_MODE_CONNECTOR_DisplayPort:
 		VOP_CTRL_SET(vop, dp_dclk_pol, 0);
