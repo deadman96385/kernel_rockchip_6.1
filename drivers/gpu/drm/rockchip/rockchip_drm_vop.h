@@ -1038,6 +1038,7 @@ struct vop2_video_port_regs {
 
 	struct vop_reg edpi_wms_hold_en;
 	struct vop_reg edpi_te_en;
+	struct vop_reg edpi_te_mode;
 	struct vop_reg edpi_wms_fs;
 	struct vop_reg gamma_update_en;
 	struct vop_reg lut_dma_rid;
