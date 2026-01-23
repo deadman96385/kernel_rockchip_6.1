@@ -45,11 +45,98 @@ if [ "${ARCH}" == "" ]; then
 	fi
 fi
 
-LOGO_PATH=${srctree}/logo.bmp
-[ -f ${LOGO_PATH} ] && LOGO=logo.bmp
+logo_path=.
 
-LOGO_KERNEL_PATH=${srctree}/logo_kernel.bmp
-[ -f ${LOGO_KERNEL_PATH} ] && LOGO_KERNEL=logo_kernel.bmp
+if grep -q "CONFIG_TOUCHSCREEN_SPD2010=y" .config; then
+	echo "RM10"
+    logo_path="./gl-logo/rm10"
+fi
+
+if grep -q "CONFIG_TOUCHSCREEN_AXS152XX=y" .config; then
+	echo "RM10-C4"
+    logo_path="./gl-logo/rm10-c4"
+fi
+
+LOGO_PATH=${logo_path}/logo.bmp
+[ -f ${LOGO_PATH} ] && LOGO=${logo_path}/logo.bmp
+
+LOGO_KERNEL_PATH=${logo_path}/logo_kernel.bmp
+[ -f ${LOGO_KERNEL_PATH} ] && LOGO_KERNEL=${logo_path}/logo_kernel.bmp
+
+UBOOT_KEEP_PRESSING_PATH=${logo_path}/uboot_keep_pressing.bmp
+[ -f ${UBOOT_KEEP_PRESSING_PATH} ] && UBOOT_KEEP_PRESSING=${logo_path}/uboot_keep_pressing.bmp
+
+UBOOT_KEEP_PRESSING_1s_PATH=${logo_path}/uboot_keep_pressing_1s.bmp
+[ -f ${UBOOT_KEEP_PRESSING_1s_PATH} ] && UBOOT_KEEP_PRESSING_1s=${logo_path}/uboot_keep_pressing_1s.bmp
+
+UBOOT_KEEP_PRESSING_2s_PATH=${logo_path}/uboot_keep_pressing_2s.bmp
+[ -f ${UBOOT_KEEP_PRESSING_2s_PATH} ] && UBOOT_KEEP_PRESSING_2s=${logo_path}/uboot_keep_pressing_2s.bmp
+
+UBOOT_RELEASE_TO_UBOOT_MODE_PATH=${logo_path}/uboot_release_to_uboot_mode.bmp
+[ -f ${UBOOT_RELEASE_TO_UBOOT_MODE_PATH} ] && UBOOT_RELEASE_TO_UBOOT_MODE=${logo_path}/uboot_release_to_uboot_mode.bmp
+
+UBOOT_RELEASE_TO_UBOOT_MODE_1s_PATH=${logo_path}/uboot_release_to_uboot_1s.bmp
+[ -f ${UBOOT_RELEASE_TO_UBOOT_MODE_1s_PATH} ] && UBOOT_RELEASE_TO_UBOOT_MODE_1s=${logo_path}/uboot_release_to_uboot_1s.bmp
+
+UBOOT_RELEASE_TO_UBOOT_MODE_2s_PATH=${logo_path}/uboot_release_to_uboot_2s.bmp
+[ -f ${UBOOT_RELEASE_TO_UBOOT_MODE_2s_PATH} ] && UBOOT_RELEASE_TO_UBOOT_MODE_2s=${logo_path}/uboot_release_to_uboot_2s.bmp
+
+UBOOT_RELEASE_TO_UBOOT_MODE_3s_PATH=${logo_path}/uboot_release_to_uboot_3s.bmp
+[ -f ${UBOOT_RELEASE_TO_UBOOT_MODE_3s_PATH} ] && UBOOT_RELEASE_TO_UBOOT_MODE_3s=${logo_path}/uboot_release_to_uboot_3s.bmp
+
+UBOOT_RELEASE_TO_UBOOT_MODE_4s_PATH=${logo_path}/uboot_release_to_uboot_4s.bmp
+[ -f ${UBOOT_RELEASE_TO_UBOOT_MODE_4s_PATH} ] && UBOOT_RELEASE_TO_UBOOT_MODE_4s=${logo_path}/uboot_release_to_uboot_4s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_PATH=${logo_path}/uboot_release_to_loader_mode.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE=${logo_path}/uboot_release_to_loader_mode.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_1S_PATH=${logo_path}/uboot_release_to_loader_1s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_1S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_1S=${logo_path}/uboot_release_to_loader_1s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_2S_PATH=${logo_path}/uboot_release_to_loader_2s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_2S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_2S=${logo_path}/uboot_release_to_loader_2s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_3S_PATH=${logo_path}/uboot_release_to_loader_3s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_3S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_3S=${logo_path}/uboot_release_to_loader_3s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_4S_PATH=${logo_path}/uboot_release_to_loader_4s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_4S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_4S=${logo_path}/uboot_release_to_loader_4s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_5S_PATH=${logo_path}/uboot_release_to_loader_5s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_5S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_5S=${logo_path}/uboot_release_to_loader_5s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_6S_PATH=${logo_path}/uboot_release_to_loader_6s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_6S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_6S=${logo_path}/uboot_release_to_loader_6s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_7S_PATH=${logo_path}/uboot_release_to_loader_7s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_7S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_7S=${logo_path}/uboot_release_to_loader_7s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_8S_PATH=${logo_path}/uboot_release_to_loader_8s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_8S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_8S=${logo_path}/uboot_release_to_loader_8s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_9S_PATH=${logo_path}/uboot_release_to_loader_9s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_9S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_9S=${logo_path}/uboot_release_to_loader_9s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_10S_PATH=${logo_path}/uboot_release_to_loader_10s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_10S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_10S=${logo_path}/uboot_release_to_loader_10s.bmp
+
+UBOOT_RELEASE_TO_LOADER_MODE_11S_PATH=${logo_path}/uboot_release_to_loader_11s.bmp
+[ -f ${UBOOT_RELEASE_TO_LOADER_MODE_11S_PATH} ] && UBOOT_RELEASE_TO_LOADER_MODE_11S=${logo_path}/uboot_release_to_loader_11s.bmp
+
+UBOOT_OPERATION_CANCELED_PATH=${logo_path}/uboot_operation_canceled.bmp
+[ -f ${UBOOT_OPERATION_CANCELED_PATH} ] && UBOOT_OPERATION_CANCELED=${logo_path}/uboot_operation_canceled.bmp
+
+UBOOT_GUIDE_PATH=${logo_path}/uboot_guide.bmp
+[ -f ${UBOOT_GUIDE_PATH} ] && UBOOT_GUIDE=${logo_path}/uboot_guide.bmp
+
+UBOOT_LOADER_GUIDE_PATH=${logo_path}/uboot_loader_guide.bmp
+[ -f ${UBOOT_LOADER_GUIDE_PATH} ] && UBOOT_LOADER_GUIDE=${logo_path}/uboot_loader_guide.bmp
+
+UBOOT_RESETTING_PATH=${logo_path}/resetting.bmp
+[ -f ${UBOOT_RESETTING_PATH} ] && UBOOT_RESETTING=${logo_path}/resetting.bmp
+
+UBOOT_UPGRADING_PATH=${logo_path}/upgrading.bmp
+[ -f ${UBOOT_UPGRADING_PATH} ] && UBOOT_UPGRADING=${logo_path}/upgrading.bmp
 
 KERNEL_IMAGE_PATH=${objtree}/arch/${ARCH}/boot/Image
 KERNEL_IMAGE_ARG="--kernel ${KERNEL_IMAGE_PATH}"
@@ -246,8 +333,24 @@ if [ "${srctree}" != "${objtree}" ]; then
 		cp -a ${LOGO_KERNEL_PATH} ${objtree}/;
 	fi
 fi
-scripts/resource_tool ${DTB_PATH} ${LOGO} ${LOGO_KERNEL} >/dev/null
-echo "  Image:  resource.img (with ${DTB} ${LOGO} ${LOGO_KERNEL}) is ready"
+
+scripts/resource_tool ${DTB_PATH} ${LOGO} ${LOGO_KERNEL} ${UBOOT_KEEP_PRESSING} ${UBOOT_RELEASE_TO_UBOOT_MODE} \
+	${UBOOT_RELEASE_TO_LOADER_MODE} ${UBOOT_GUIDE} ${UBOOT_LOADER_GUIDE} ${UBOOT_RESETTING} ${UBOOT_UPGRADING} \
+	${UBOOT_OPERATION_CANCELED} ${UBOOT_KEEP_PRESSING_1s} ${UBOOT_KEEP_PRESSING_2s} \
+	${UBOOT_RELEASE_TO_UBOOT_MODE_1s} ${UBOOT_RELEASE_TO_UBOOT_MODE_2s} ${UBOOT_RELEASE_TO_UBOOT_MODE_3s} \
+	${UBOOT_RELEASE_TO_UBOOT_MODE_4s} ${UBOOT_RELEASE_TO_LOADER_MODE_1S} ${UBOOT_RELEASE_TO_LOADER_MODE_2S}  \
+	${UBOOT_RELEASE_TO_LOADER_MODE_3S} ${UBOOT_RELEASE_TO_LOADER_MODE_4S} ${UBOOT_RELEASE_TO_LOADER_MODE_5S} \
+	${UBOOT_RELEASE_TO_LOADER_MODE_6S} ${UBOOT_RELEASE_TO_LOADER_MODE_7S} ${UBOOT_RELEASE_TO_LOADER_MODE_8S} \
+	${UBOOT_RELEASE_TO_LOADER_MODE_9S} ${UBOOT_RELEASE_TO_LOADER_MODE_10S} ${UBOOT_RELEASE_TO_LOADER_MODE_11S} >/dev/null
+
+echo "  Image:  resource.img (with ${DTB} ${LOGO} ${LOGO_KERNEL} ${UBOOT_KEEP_PRESSING} ${UBOOT_RELEASE_TO_UBOOT_MODE} \
+	${UBOOT_RELEASE_TO_LOADER_MODE} ${UBOOT_GUIDE} ${UBOOT_LOADER_GUIDE} ${UBOOT_RESETTING} ${UBOOT_UPGRADING} \
+	${UBOOT_OPERATION_CANCELED} ${UBOOT_KEEP_PRESSING_1s} ${UBOOT_KEEP_PRESSING_2s} \
+	${UBOOT_RELEASE_TO_UBOOT_MODE_1s} ${UBOOT_RELEASE_TO_UBOOT_MODE_2s} ${UBOOT_RELEASE_TO_UBOOT_MODE_3s} \
+	${UBOOT_RELEASE_TO_UBOOT_MODE_4s} ${UBOOT_RELEASE_TO_LOADER_MODE_1S} ${UBOOT_RELEASE_TO_LOADER_MODE_2S}  \
+	${UBOOT_RELEASE_TO_LOADER_MODE_3S} ${UBOOT_RELEASE_TO_LOADER_MODE_4S} ${UBOOT_RELEASE_TO_LOADER_MODE_5S} \
+	${UBOOT_RELEASE_TO_LOADER_MODE_6S} ${UBOOT_RELEASE_TO_LOADER_MODE_7S} ${UBOOT_RELEASE_TO_LOADER_MODE_8S} \
+	${UBOOT_RELEASE_TO_LOADER_MODE_9S} ${UBOOT_RELEASE_TO_LOADER_MODE_10S} ${UBOOT_RELEASE_TO_LOADER_MODE_11S}) is ready"
 
 if [ -f "${BOOT_IMG}" ]; then
 	if file -L -p -b ${BOOT_IMG} | grep -q 'Device Tree Blob' ; then

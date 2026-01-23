@@ -422,9 +422,11 @@ struct rtnexthop {
 #define RTNH_F_LINKDOWN		16	/* carrier-down on nexthop */
 #define RTNH_F_UNRESOLVED	32	/* The entry is unresolved (ipmr) */
 #define RTNH_F_TRAP		64	/* Nexthop is trapping packets */
+#define RTNH_F_SUSPECT		128	/* We don't know the real state	*/
+#define RTNH_F_BADSTATE		(RTNH_F_DEAD | RTNH_F_SUSPECT)
 
 #define RTNH_COMPARE_MASK	(RTNH_F_DEAD | RTNH_F_LINKDOWN | \
-				 RTNH_F_OFFLOAD | RTNH_F_TRAP)
+				 RTNH_F_OFFLOAD | RTNH_F_TRAP | RTNH_F_SUSPECT)
 
 /* Macros to handle hexthops */
 

@@ -589,6 +589,16 @@
 			compatible = "rockchip,drm-logo";
 			reg = <0x0 0x0>;
 		};
+
+		ramoops: ramoops@7f000000 {
+			compatible = "ramoops";
+			reg = <0x7f000000 0x100000>;
+			record-size = <0x20000>;
+			console-size = <0x40000>;
+			ftrace-size = <0x00000>;
+			pmsg-size = <0x40000>;
+			status = "okay";
+		};
 	};
 
 	rkaiisp_vir0: rkaiisp-vir0 {
@@ -1847,7 +1857,7 @@
 		clocks = <&cru TCLK_WDT_NS>, <&cru PCLK_WDT_NS>;
 		clock-names = "tclk", "pclk";
 		interrupts = <GIC_SPI 74 IRQ_TYPE_LEVEL_HIGH>;
-		status = "disabled";
+		status = "okay";
 	};
 
 	dmac: dma-controller@20b80000 {
@@ -2516,6 +2526,7 @@
 				     <GIC_SPI 33 IRQ_TYPE_LEVEL_HIGH>,
 				     <GIC_SPI 34 IRQ_TYPE_LEVEL_HIGH>;
 			interrupt-names = "otg-id", "otg-bvalid", "linestate";
+			rockchip,dis-u2-susphy;
 			status = "disabled";
 		};
 	};
@@ -2606,6 +2617,7 @@
 		snps,parkmode-disable-ss-quirk;
 		snps,usb2-gadget-lpm-disable;
 		snps,usb2-lpm-disable;
+		tx-fifo-resize;
 		status = "disabled";
 	};
 
@@ -3305,8 +3317,8 @@
 		rockchip,pvtm-pvtpll;
 		rockchip,pvtm-offset = <0x54>;
 		rockchip,pvtm-sample-time = <500>;
-		rockchip,pvtm-freq = <950000>;
-		rockchip,pvtm-volt = <1000000>;
+		rockchip,pvtm-freq = <800000>;
+		rockchip,pvtm-volt = <950000>;
 		rockchip,pvtm-ref-temp = <40>;
 		rockchip,pvtm-temp-prop = <0 0>;
 		rockchip,pvtm-thermal-zone = "cpu-thermal";
@@ -3318,46 +3330,48 @@
 		opp-396000000 {
 			opp-supported-hw = <0xff 0xffff>;
 			opp-hz = /bits/ 64 <396000000>;
-			opp-microvolt = <850000 850000 1050000>;
-			opp-microvolt-L0 = <900000 900000 1050000>;
-			opp-microvolt-L1 = <875000 875000 1050000>;
+			opp-microvolt = <875000 875000 950000>;
+			opp-microvolt-L0 = <900000 900000 950000>;
+			opp-microvolt-L1 = <875000 875000 950000>;
 		};
 		opp-510000000 {
 			opp-supported-hw = <0xff 0xffff>;
 			opp-hz = /bits/ 64 <510000000>;
-			opp-microvolt = <850000 850000 1050000>;
-			opp-microvolt-L0 = <900000 900000 1050000>;
-			opp-microvolt-L1 = <875000 875000 1050000>;
+			opp-microvolt = <875000 875000 950000>;
+			opp-microvolt-L0 = <900000 900000 950000>;
+			opp-microvolt-L1 = <875000 875000 950000>;
 		};
 		opp-600000000 {
 			opp-supported-hw = <0xff 0xffff>;
 			opp-hz = /bits/ 64 <600000000>;
-			opp-microvolt = <850000 850000 1050000>;
-			opp-microvolt-L0 = <900000 900000 1050000>;
-			opp-microvolt-L1 = <875000 875000 1050000>;
+			opp-microvolt = <875000 875000 950000>;
+			opp-microvolt-L0 = <900000 900000 950000>;
+			opp-microvolt-L1 = <875000 875000 950000>;
 		};
 		opp-700000000 {
 			opp-supported-hw = <0xf7 0xffff>;
 			opp-hz = /bits/ 64 <700000000>;
-			opp-microvolt = <850000 850000 1050000>;
-			opp-microvolt-L0 = <900000 900000 1050000>;
-			opp-microvolt-L1 = <875000 875000 1050000>;
+			opp-microvolt = <875000 875000 950000>;
+			opp-microvolt-L0 = <900000 900000 950000>;
+			opp-microvolt-L1 = <875000 875000 950000>;
 		};
 		opp-800000000 {
 			opp-supported-hw = <0xf7 0xffff>;
 			opp-hz = /bits/ 64 <800000000>;
-			opp-microvolt = <925000 925000 1050000>;
+			opp-microvolt = <925000 925000 950000>;
 		};
 		opp-900000000 {
 			opp-supported-hw = <0xf7 0xffff>;
 			opp-hz = /bits/ 64 <900000000>;
 			opp-microvolt = <975000 975000 1050000>;
+			status="disabled";
 		};
 		opp-950000000 {
 			opp-supported-hw = <0xf7 0xffff>;
 			opp-hz = /bits/ 64 <950000000>;
 			opp-microvolt = <975000 975000 1050000>;
 			opp-microvolt-L0 = <1000000 1000000 1050000>;
+			status="disabled";
 		};
 	};
 

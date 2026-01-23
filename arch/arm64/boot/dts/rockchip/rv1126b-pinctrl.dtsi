@@ -1805,7 +1805,7 @@
 				/* sdmmc1_d0 */
 				<3 RK_PA2 1 &pcfg_pull_up>,
 				/* sdmmc1_d1 */
-				<3 RK_PA3 1 &pcfg_pull_up>,
+				<3 RK_PA3 1 &pcfg_pull_none_drv_level_3_75>,
 				/* sdmmc1_d2 */
 				<3 RK_PA4 1 &pcfg_pull_up>,
 				/* sdmmc1_d3 */
@@ -1823,7 +1823,7 @@
 		sdmmc1_clk_pins: sdmmc1-clk-pins {
 			rockchip,pins =
 				/* sdmmc1_clk */
-				<3 RK_PA0 1 &pcfg_pull_none>;
+				<3 RK_PA0 1 &pcfg_pull_none_drv_level_3_75>;
 		};
 
 		/omit-if-no-ref/
