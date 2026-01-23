@@ -23,6 +23,9 @@
 #include <drm/drm_of.h>
 #include <drm/drm_simple_kms_helper.h>
 
+#include <linux/gpio.h>
+#include <linux/of_gpio.h>
+
 #include "rockchip_drm_drv.h"
 #include "rockchip_drm_vop.h"
 
@@ -345,7 +348,19 @@ struct dw_mipi_dsi_rockchip {
 	struct rockchip_drm_sub_dev sub_dev;
 	struct drm_panel *panel;
 	struct drm_bridge *bridge;
+
+	struct gpio_desc *te_gpio;
+	bool disable_hold_mode;
 };
+
+struct te_work_queue_data {
+	struct delayed_work dwork;
+	struct workqueue_struct *workqueue;
+	struct dw_mipi_dsi_rockchip* param;
+	bool te_is_work;
+};
+
+static struct te_work_queue_data te_wq_data;
 
 static struct dw_mipi_dsi_rockchip *to_dsi(struct drm_encoder *encoder)
 {
@@ -851,6 +866,8 @@ dw_mipi_dsi_encoder_atomic_check(struct drm_encoder *encoder,
 			s->output_flags |= ROCKCHIP_OUTPUT_DATA_SWAP;
 	}
 
+	s->soft_te = dsi->te_gpio ? true : false;
+	s->hold_mode = dsi->disable_hold_mode ? false : s->soft_te;
 	/* dual link dsi for rk3399 */
 	if (dsi->id && dsi->cdata->soc_type == RK3399)
 		s->output_flags |= ROCKCHIP_OUTPUT_DATA_SWAP;
@@ -1407,6 +1424,34 @@ dw_mipi_dsi_rockchip_stream_standby(void *priv_data, bool standby)
 	rockchip_drm_crtc_standby(encoder->crtc, standby);
 }
 
+static void te_work_queue_handler(struct work_struct *work)
+{
+	if (!te_wq_data.te_is_work) {
+		struct te_work_queue_data *data =
+			container_of(to_delayed_work(work), struct te_work_queue_data, dwork);
+
+		struct dw_mipi_dsi_rockchip *dsi = (struct dw_mipi_dsi_rockchip *)data->param;
+		struct drm_encoder *encoder = &dsi->encoder;
+		// printk("%s:%d\n",__func__,__LINE__);
+		if (encoder->crtc)
+			rockchip_drm_te_handle(encoder->crtc);
+
+		queue_delayed_work(te_wq_data.workqueue, &te_wq_data.dwork, msecs_to_jiffies(16));
+	}
+}
+
+static irqreturn_t dw_mipi_dsi_te_irq_handler(int irq, void *dev_id)
+{
+	struct dw_mipi_dsi_rockchip *dsi = (struct dw_mipi_dsi_rockchip *)dev_id;
+	struct drm_encoder *encoder = &dsi->encoder;
+	// printk("%s:%d\n",__func__,__LINE__);
+	te_wq_data.te_is_work = true;
+	if (encoder->crtc)
+		rockchip_drm_te_handle(encoder->crtc);
+
+	return IRQ_HANDLED;
+}
+
 static int dw_mipi_dsi_rockchip_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
@@ -1550,6 +1595,34 @@ static int dw_mipi_dsi_rockchip_probe(struct platform_device *pdev)
 		goto err_clkdisable;
 	}
 
+	if (device_property_read_bool(dev, "disable-hold-mode"))
+		dsi->disable_hold_mode = true;
+	dsi->te_gpio = devm_gpiod_get_optional(dsi->dev, "te", GPIOD_IN);
+	if (IS_ERR(dsi->te_gpio))
+		dsi->te_gpio = NULL;
+
+	if (dsi->te_gpio) {
+		ret = devm_request_threaded_irq(dsi->dev, gpiod_to_irq(dsi->te_gpio),
+						dw_mipi_dsi_te_irq_handler, NULL,
+						IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+						"PANEL-TE", dsi);
+		if (ret) {
+			dev_err(dsi->dev, "failed to request TE IRQ: %d\n", ret);
+			return ret;
+		}
+
+		te_wq_data.workqueue = create_singlethread_workqueue("te_wq_data.workqueue");
+		if (!te_wq_data.workqueue)
+			return -ENOMEM;
+
+		te_wq_data.param = dsi;
+		te_wq_data.te_is_work = false;
+
+		INIT_DELAYED_WORK(&te_wq_data.dwork, te_work_queue_handler);
+
+		queue_delayed_work(te_wq_data.workqueue, &te_wq_data.dwork, 2 * HZ);
+	}
+
 	return 0;
 
 err_clkdisable:
@@ -1561,6 +1634,10 @@ static int dw_mipi_dsi_rockchip_remove(struct platform_device *pdev)
 {
 	struct dw_mipi_dsi_rockchip *dsi = platform_get_drvdata(pdev);
 
+	if (dsi->te_gpio) {
+		cancel_delayed_work_sync(&te_wq_data.dwork);
+		destroy_workqueue(te_wq_data.workqueue);
+	}
 
 	dw_mipi_dsi_rockchip_component_del(dsi);
 	dw_mipi_dsi_remove(dsi->dmd);
