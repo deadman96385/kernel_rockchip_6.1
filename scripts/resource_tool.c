@@ -1470,6 +1470,14 @@ static bool write_header(const int file_num)
 	return write_data(0, &hdr, sizeof(hdr));
 }
 
+static const char *basename_from_path(const char *path)
+{
+    const char *p = strrchr(path, '/');
+    if (p)
+        return p + 1;
+    return path;
+}
+
 static bool write_index_tbl(const int file_num, const char **files)
 {
 	LOGD("try to write index table...");
@@ -1516,6 +1524,8 @@ static bool write_index_tbl(const int file_num, const char **files)
 				path = FDT_PATH;
 				foundFdt = true;
 			}
+		} else if (!strcasecmp(files[i] + strlen(files[i]) - 4, ".bmp")) {
+            path = basename_from_path(files[i]);
 		}
 		snprintf(entry.path, sizeof(entry.path), "%s", path);
 		offset += fix_blocks(file_size);

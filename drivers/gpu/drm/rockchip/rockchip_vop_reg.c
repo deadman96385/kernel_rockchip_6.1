@@ -1815,6 +1815,8 @@ static const struct vop_ctrl rv1126_ctrl_data = {
 	.vs_st_end_f1 = VOP_REG(RK3366_LIT_DSP_VS_ST_END_F1, 0x0fff0fff, 0),
 	.dsp_interlace = VOP_REG(RK3366_LIT_DSP_CTRL2, 0x1, 0),
 	.global_regdone_en = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 13),
+	.edpi_wms_fs = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 11),
+	.edpi_wms_hold_en = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 10),
 	.auto_gate_en = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 0),
 	.dsp_layer_sel = VOP_REG(RK3366_LIT_DSP_CTRL2, 0xf, 22),
 	.overlay_mode = VOP_REG(RK3366_LIT_DSP_CTRL2, 0x1, 4),
@@ -1928,6 +1930,8 @@ static const struct vop_ctrl rv1126b_ctrl_data = {
 	.axi_max_outstanding_en = VOP_REG(RK3366_LIT_SYS_CTRL1, 0x1, 12),
 	.axi_outstanding_max_num = VOP_REG(RK3366_LIT_SYS_CTRL1, 0x1f, 16),
 
+	.edpi_wms_fs = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 11),
+	.edpi_wms_hold_en = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 10),
 	.auto_gate_en = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 0),
 	.standby = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 1),
 	.dsp_outzero = VOP_REG(RK3366_LIT_SYS_CTRL2, 0x1, 3),

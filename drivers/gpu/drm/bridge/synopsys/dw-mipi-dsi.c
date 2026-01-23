@@ -1020,6 +1020,11 @@ static void dw_mipi_dsi_enable(struct dw_mipi_dsi *dsi)
 		dw_mipi_dsi_set_mode(dsi, MIPI_DSI_MODE_VIDEO);
 	} else {
 		dsi_write(dsi, DSI_EDPI_CMD_SIZE, dsi->mode.hdisplay);
+
+		val = dsi_read(dsi, DSI_CMD_MODE_CFG);
+		val &= ~DCS_LW_TX_LP;
+		dsi_write(dsi, DSI_CMD_MODE_CFG, val);
+
 		dw_mipi_dsi_set_mode(dsi, 0);
 	}
 

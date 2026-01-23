@@ -1426,7 +1426,7 @@ static inline t_key prefix_mismatch(t_key key, struct key_vector *n)
 bool fib_lookup_good_nhc(const struct fib_nh_common *nhc, int fib_flags,
 			 const struct flowi4 *flp)
 {
-	if (nhc->nhc_flags & RTNH_F_DEAD)
+	if (!(fib_flags & FIB_LOOKUP_IGNORE_DEAD) && (nhc->nhc_flags & RTNH_F_DEAD))
 		return false;
 
 	if (ip_ignore_linkdown(nhc->nhc_dev) &&
@@ -1435,6 +1435,10 @@ bool fib_lookup_good_nhc(const struct fib_nh_common *nhc, int fib_flags,
 		return false;
 
 	if (flp->flowi4_oif && flp->flowi4_oif != nhc->nhc_oif)
+		return false;
+
+	if (flp->fl4_gw && flp->fl4_gw != nhc->nhc_gw.ipv4 &&
+	    nhc->nhc_gw.ipv4 && nhc->nhc_scope == RT_SCOPE_LINK)
 		return false;
 
 	return true;
@@ -1597,7 +1601,7 @@ out_reject:
 			trace_fib_table_lookup(tb->tb_id, flp, NULL, err);
 			return err;
 		}
-		if (fi->fib_flags & RTNH_F_DEAD)
+		if (!(fib_flags & FIB_LOOKUP_IGNORE_DEAD) && (fi->fib_flags & RTNH_F_DEAD))
 			continue;
 
 		if (unlikely(fi->nh)) {
