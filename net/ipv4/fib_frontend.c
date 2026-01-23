@@ -49,6 +49,8 @@
 
 #ifndef CONFIG_IP_MULTIPLE_TABLES
 
+#define FIB_RES_TABLE(r) (RT_TABLE_MAIN)
+
 static int __net_init fib4_rules_init(struct net *net)
 {
 	struct fib_table *local_table, *main_table;
@@ -72,6 +74,8 @@ fail:
 	return -ENOMEM;
 }
 #else
+
+#define FIB_RES_TABLE(r) (fib_result_table(r))
 
 struct fib_table *fib_new_table(struct net *net, u32 id)
 {
@@ -346,6 +350,9 @@ static int __fib_validate_source(struct sk_buff *skb, __be32 src, __be32 dst,
 				 int rpf, struct in_device *idev, u32 *itag)
 {
 	struct net *net = dev_net(dev);
+	u32 table;
+	unsigned char prefixlen;
+	unsigned char scope;
 	struct flow_keys flkeys;
 	int ret, no_addr;
 	struct fib_result res;
@@ -363,6 +370,7 @@ static int __fib_validate_source(struct sk_buff *skb, __be32 src, __be32 dst,
 	fl4.flowi4_flags = 0;
 	fl4.flowi4_uid = sock_net_uid(net, NULL);
 	fl4.flowi4_multipath_hash = 0;
+	fl4.fl4_gw = 0;
 
 	no_addr = idev->ifa_list == NULL;
 
@@ -394,15 +402,23 @@ static int __fib_validate_source(struct sk_buff *skb, __be32 src, __be32 dst,
 	}
 	if (no_addr)
 		goto last_resort;
-	if (rpf == 1)
-		goto e_rpf;
+	table = FIB_RES_TABLE(&res);
+	prefixlen = res.prefixlen;
+	scope = res.scope;
 	fl4.flowi4_oif = dev->ifindex;
 
 	ret = 0;
 	if (fib_lookup(net, &fl4, &res, FIB_LOOKUP_IGNORE_LINKSTATE) == 0) {
-		if (res.type == RTN_UNICAST)
+		if (res.type == RTN_UNICAST &&
+		    ((table == FIB_RES_TABLE(&res) &&
+		      res.prefixlen >= prefixlen && res.scope >= scope) ||
+		     !rpf)) {
 			ret = FIB_RES_NHC(res)->nhc_scope >= RT_SCOPE_HOST;
+			return ret;
+		}
 	}
+	if (rpf == 1)
+		goto e_rpf;
 	return ret;
 
 last_resort:
@@ -1438,9 +1454,7 @@ static int fib_inetaddr_event(struct notifier_block *this, unsigned long event, 
 	switch (event) {
 	case NETDEV_UP:
 		fib_add_ifaddr(ifa);
-#ifdef CONFIG_IP_ROUTE_MULTIPATH
 		fib_sync_up(dev, RTNH_F_DEAD);
-#endif
 		atomic_inc(&net->ipv4.dev_addr_genid);
 		rt_cache_flush(dev_net(dev));
 		break;
@@ -1485,9 +1499,7 @@ static int fib_netdev_event(struct notifier_block *this, unsigned long event, vo
 		in_dev_for_each_ifa_rtnl(ifa, in_dev) {
 			fib_add_ifaddr(ifa);
 		}
-#ifdef CONFIG_IP_ROUTE_MULTIPATH
 		fib_sync_up(dev, RTNH_F_DEAD);
-#endif
 		atomic_inc(&net->ipv4.dev_addr_genid);
 		rt_cache_flush(net);
 		break;
