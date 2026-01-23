@@ -741,7 +741,7 @@ static bool find_match(struct fib6_nh *nh, u32 fib6_flags,
 	bool rc = false;
 	int m;
 
-	if (nh->fib_nh_flags & RTNH_F_DEAD)
+	if (!(strict & RT6_LOOKUP_F_IGNORE_DEAD) && (nh->fib_nh_flags & RTNH_F_DEAD))
 		goto out;
 
 	if (ip6_ignore_linkdown(nh->fib_nh_dev) &&
@@ -2203,6 +2203,7 @@ redo_rt6_select:
 
 	return 0;
 }
+EXPORT_SYMBOL(fib6_table_lookup);
 
 struct rt6_info *ip6_pol_route(struct net *net, struct fib6_table *table,
 			       int oif, struct flowi6 *fl6,
@@ -4787,6 +4788,7 @@ void rt6_sync_up(struct net_device *dev, unsigned char nh_flags)
 
 	fib6_clean_all(dev_net(dev), fib6_ifup, &arg);
 }
+EXPORT_SYMBOL(rt6_sync_up);
 
 /* only called for fib entries with inline fib6_nh */
 static bool rt6_multipath_uses_dev(const struct fib6_info *rt,
@@ -4881,6 +4883,13 @@ static int fib6_ifdown(struct fib6_info *rt, void *p_arg)
 		rt->fib6_nh->fib_nh_flags |= RTNH_F_LINKDOWN;
 		rt6_multipath_rebalance(rt);
 		break;
+	case NETDEV_DEAD:
+		if (rt->fib6_nh->fib_nh_dev != dev ||
+		    rt->fib6_flags & (RTF_LOCAL | RTF_ANYCAST))
+			break;
+		rt->fib6_nh->fib_nh_flags |= RTNH_F_DEAD;
+		rt6_multipath_rebalance(rt);
+		break;
 	}
 
 	return 0;
@@ -4901,6 +4910,7 @@ void rt6_sync_down_dev(struct net_device *dev, unsigned long event)
 	else
 		fib6_clean_all(net, fib6_ifdown, &arg);
 }
+EXPORT_SYMBOL(rt6_sync_down_dev);
 
 void rt6_disable_ip(struct net_device *dev, unsigned long event)
 {
