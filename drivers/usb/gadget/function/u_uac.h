@@ -23,7 +23,7 @@
 #define UAC_DEF_PSRATE		48000
 #define UAC_DEF_PSSIZE		2
 #define UAC_DEF_PFU		0
-#define UAC_DEF_REQ_NUM		2
+#define UAC_DEF_REQ_NUM		6
 
 #define UAC1_OUT_EP_MAX_PACKET_SIZE 200
 
